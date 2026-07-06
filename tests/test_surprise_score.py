@@ -34,8 +34,8 @@ def test_build_event_table_basic():
     ]
     df = build_event_table(records)
     assert len(df) == 2
-    assert df.loc[0, "is_forward_guidance"] is True
-    assert df.loc[1, "is_forward_guidance"] is False
+    assert df.loc[0, "is_forward_guidance"] == True  # noqa: E712 (numpy bool)
+    assert df.loc[1, "is_forward_guidance"] == False  # noqa: E712
     # Non-forward-guidance rows should have weighted_score == 0
     assert df.loc[1, "weighted_score"] == pytest.approx(0.0)
 

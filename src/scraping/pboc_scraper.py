@@ -62,11 +62,9 @@ def fetch_listing_page(page: int = 0) -> BeautifulSoup:
     if page == 0:
         url = f"{BASE_URL}{LISTING_PATH}"
     else:
-        # TODO_PAGINATION: confirm the exact pagination URL pattern.
-        # Common PBOC patterns:
-        #   /goutongjiaoliu/113456/113469/index_{page}.html
-        #   or a JS-driven endpoint — may require Selenium/Playwright.
-        url = f"{BASE_URL}{LISTING_PATH.replace('index.html', f'index_{page}.html')}"
+        # Verified 2026-07: PBOC paginates as /goutongjiaoliu/113456/113469/11040-{n}.html
+        # where 11040 is the channel ID for this listing and n starts at 2.
+        url = f"{BASE_URL}/goutongjiaoliu/113456/113469/11040-{page + 1}.html"
 
     logger.info("GET %s", url)
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -79,19 +77,20 @@ def parse_listing(soup: BeautifulSoup, scraped_at: str) -> list[dict]:
     """
     Extract article stubs from a listing page.
 
-    TODO_PARSING: The CSS selectors below are best-guess placeholders based on
-    common PBOC listing structure.  Verify against the live page and update the
-    selectors accordingly.  The site has been redesigned several times.
+    Live PBOC structure (verified 2026-07):
+        <font class="newslist_style">
+          <a href="/goutongjiaoliu/.../index.html" ...>title</a>
+        </font>
+        <span class="hui12">YYYY-MM-DD</span>
     """
     articles = []
 
-    # TODO_PARSING: confirm the correct container selector.
-    # Observed candidates: "ul.news_ul li", "div.news_box li", "div.list_con li"
-    items = soup.select("ul.news_ul li")
+    # Each article link sits inside a <font class="newslist_style"> element.
+    items = soup.select("font.newslist_style")
 
     if not items:
         logger.warning(
-            "No items matched selector 'ul.news_ul li' — listing HTML may have changed."
+            "No items matched selector 'font.newslist_style' — listing HTML may have changed."
         )
 
     for item in items:
@@ -100,13 +99,13 @@ def parse_listing(soup: BeautifulSoup, scraped_at: str) -> list[dict]:
             if not a_tag:
                 continue
 
-            title = a_tag.get_text(strip=True)
+            title = a_tag.get("title") or a_tag.get_text(strip=True)
             href = a_tag.get("href", "")
             url = href if href.startswith("http") else f"{BASE_URL}{href}"
 
-            # TODO_PARSING: date extraction — look for a <span> or <em> sibling.
-            date_tag = item.find("span") or item.find("em")
-            published = date_tag.get_text(strip=True) if date_tag else ""
+            # Date is in the next sibling <span class="hui12">
+            date_span = item.find_next_sibling("span", class_="hui12")
+            published = date_span.get_text(strip=True) if date_span else ""
 
             articles.append(
                 {
