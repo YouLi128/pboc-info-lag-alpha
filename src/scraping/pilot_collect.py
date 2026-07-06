@@ -31,16 +31,21 @@ FIELDNAMES = [
 ]
 
 
-def run(pages: int, out: Path, skip_llm: bool = False) -> None:
+def run(pages: int, out: Path, start_page: int = 0, skip_llm: bool = False) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     clf = None if skip_llm else StanceClassifier()
 
-    total = 0
-    with out.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
+    # Append if file exists (allows resuming interrupted runs)
+    mode = "a" if out.exists() else "w"
+    write_header = not out.exists()
 
-        for article in scrape_listings(max_pages=pages):
+    total = 0
+    with out.open(mode, newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+
+        for article in scrape_listings(max_pages=pages, start_page=start_page):
             logger.info("[%d] %s  (%s)", total + 1, article["title"][:40], article["published"])
 
             # Full text
@@ -85,7 +90,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--pages", type=int, default=3, help="Number of listing pages to scrape")
+    parser.add_argument("--start-page", type=int, default=0, help="Zero-indexed page to start from")
     parser.add_argument("--out", type=Path, default=Path("data/processed/pilot_classified.csv"))
     parser.add_argument("--skip-llm", action="store_true", help="Skip LLM classification (scrape only)")
     args = parser.parse_args()
-    run(pages=args.pages, out=args.out, skip_llm=args.skip_llm)
+    run(pages=args.pages, out=args.out, start_page=args.start_page, skip_llm=args.skip_llm)

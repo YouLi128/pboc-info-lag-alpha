@@ -145,17 +145,17 @@ def fetch_article_text(url: str) -> str:
     return content_div.get_text(separator="\n", strip=True)
 
 
-def scrape_listings(max_pages: int = 5) -> Generator[dict, None, None]:
+def scrape_listings(max_pages: int = 5, start_page: int = 0) -> Generator[dict, None, None]:
     """
     Yield article stubs across multiple listing pages.
 
     Args:
-        max_pages: Stop after this many pages regardless of whether more exist.
-                   Set to 1 during initial testing.
+        max_pages:  Stop after this many pages.
+        start_page: Zero-indexed page to start from (0 = most recent).
     """
     scraped_at = datetime.now(timezone.utc).isoformat()
 
-    for page in range(max_pages):
+    for page in range(start_page, start_page + max_pages):
         logger.info("Scraping listing page %d / %d", page + 1, max_pages)
         try:
             soup = fetch_listing_page(page)
