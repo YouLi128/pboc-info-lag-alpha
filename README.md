@@ -1,80 +1,82 @@
-# Lost in Translation: LLM-Based Cross-Border Information Lag in PBOC Communications
+# Lost in Translation
+## LLM-Based Cross-Border Information Lag in PBOC Communications
 
-NUS Master of Computing capstone project.
-
----
-
-## Research Question
-
-Does LLM-extracted *forward guidance* stance from PBOC communications predict
-short-horizon price and volatility moves in offshore RMB (CNH) beyond what
-same-day headline-driven reactions already capture?
+NUS Master of Computing 毕业论文项目。
 
 ---
 
-## Hypotheses
+## 研究问题
 
-| ID | Hypothesis |
-|----|------------|
-| **H1** | LLM-extracted forward-guidance stance has statistically significant predictive power (Granger causality / event-study) for short-horizon CNH returns, beyond a keyword-dictionary baseline. |
-| **H2** | The predictive lag is larger for *non-headline* channels (press conference Q&A, regional branch remarks, footnote-level report language) than for headline policy actions (rate/RRR changes), which are already reflected in near-instant English wire coverage. |
-| **H3** *(stretch)* | The lag has been shrinking over time, consistent with improving market efficiency in digesting Chinese-language monetary policy communication. |
+利用大语言模型从中国人民银行（PBOC）中文官方文件中提取"前瞻性指引"立场，
+研究这一信息是否能在离岸人民币（CNH）市场中预测短期价格/波动率变动——
+超越英文电报已捕捉到的同日反应，即验证中英文信息处理存在时滞。
 
 ---
 
-## Pipeline
+## 研究假设
+
+| 编号 | 假设 |
+|------|------|
+| **H1** | LLM 提取的前瞻性指引立场对 CNH 短期收益率具有统计显著的预测力（格兰杰因果 / 事件研究法），超越关键词词典基准 |
+| **H2** | 非头条渠道（发布会问答、地区分行表态、报告脚注措辞）的预测滞后大于头条政策行动（调息/降准），因为后者已被英文电报近实时覆盖 |
+| **H3** *(stretch)* | 该滞后随时间收窄，与市场消化中文货币政策信息的效率提升一致 |
+
+---
+
+## 四阶段流程
 
 ```
-Stage 1 — Data Collection
-  ├── PBOC Chinese-language texts   (src/scraping/pboc_scraper.py)
-  │     press releases, Q&A transcripts, monetary policy reports
-  └── Market prices                 (src/scraping/market_data_loader.py)
-        CNH/USD  — Bloomberg/Wind manual export (CSV)
-        BTC/USDT — Binance REST API (public, no key required)
+第一阶段 — 数据采集
+  ├── PBOC 中文语料          src/scraping/pboc_scraper.py
+  │     新闻发布、问答实录、货币政策报告
+  └── 市场价格              src/scraping/market_data_loader.py
+        CNH/USD — Bloomberg/Wind 手动导出 CSV
+        BTC/USDT — Binance 公开 REST API（无需密钥）
 
-Stage 2 — LLM Processing
-  └── Stance classification         (src/llm_processing/stance_classifier.py)
-        Input : raw Chinese text segment
-        Output: segment_type {forward_guidance | descriptive | historical}
-                stance         {dovish | hawkish | neutral}
-                confidence     [0, 1]
+第二阶段 — LLM 处理
+  └── 立场分类              src/llm_processing/stance_classifier.py
+        输入：中文文本片段
+        输出：segment_type  {forward_guidance | descriptive | historical}
+              stance        {dovish | hawkish | neutral}
+              confidence    [0, 1]
+              reasoning     简短中文说明
 
-Stage 3 — Signal Construction
-  └── Surprise score + alignment    (src/signal_construction/surprise_score.py)
-        Surprise_t = weighted_stance_t − rolling_baseline_{t-k}
-        Align to market data at release timestamp + forward windows [5, 15, 30, 60 min]
+第三阶段 — 信号构建
+  └── 惊喜度 + 时间对齐      src/signal_construction/surprise_score.py
+        Surprise_t = 加权立场分_t − 滚动均值基线_{t-k}
+        对齐至发布时间戳后各时间窗口收益率 [5, 15, 30, 60 分钟]
 
-Stage 4 — Hypothesis Testing
-  └── Statistical analysis          (src/analysis/granger_test.py)
-        Granger causality: surprise → CNH return (H1)
-        Channel stratification      (H2)
-        Rolling-window / Chow test  (H3)
+第四阶段 — 假设检验
+  └── 统计分析              src/analysis/granger_test.py
+        格兰杰因果检验（H1）
+        渠道分层事件研究（H2）
+        滚动窗口 / Chow 检验（H3）
 ```
 
 ---
 
-## Repository Layout
+## 目录结构
 
 ```
 pboc-info-lag-alpha/
-├── config.yaml                     # central config (URLs, model, windows)
-├── .env.example                    # copy to .env, fill API keys
+├── config.yaml                        # 统一配置（URL、模型、时间窗口等）
+├── .env.example                       # 复制为 .env 并填入 API 密钥
 ├── requirements.txt
 ├── data/
-│   ├── raw/                        # gitignored; scraped texts, price exports
-│   └── processed/                  # gitignored; cleaned DataFrames
+│   ├── raw/                           # 已 gitignore；存放原始语料和价格导出
+│   └── processed/                     # 已 gitignore；存放清洗后的 DataFrame
 ├── src/
 │   ├── scraping/
-│   │   ├── pboc_scraper.py         # PBOC listing + full-text fetcher
-│   │   └── market_data_loader.py   # CNH CSV loader + Binance BTC fetcher
+│   │   ├── pboc_scraper.py            # 人民银行列表页 + 全文抓取
+│   │   └── market_data_loader.py      # CNH CSV 读取 + Binance BTC 拉取
 │   ├── llm_processing/
-│   │   └── stance_classifier.py    # Anthropic API classification
+│   │   └── stance_classifier.py       # Claude API 中文立场分类
 │   ├── signal_construction/
-│   │   └── surprise_score.py       # surprise score + market alignment
+│   │   └── surprise_score.py          # 惊喜度计算 + 市场收益率对齐
 │   └── analysis/
-│       └── granger_test.py         # Granger causality + event study
+│       └── granger_test.py            # 格兰杰检验 + 事件研究
 ├── notebooks/
-│   └── 00_pilot_exploration.ipynb  # (placeholder)
+│   └── 00_pilot_exploration.ipynb     # 探索性分析（占位）
 └── tests/
     ├── test_pboc_scraper.py
     └── test_surprise_score.py
@@ -82,72 +84,95 @@ pboc-info-lag-alpha/
 
 ---
 
-## Setup
+## 环境配置
 
 ```bash
-# 1. Clone
+# 1. 克隆仓库
 git clone https://github.com/YouLi128/pboc-info-lag-alpha.git
 cd pboc-info-lag-alpha
 
-# 2. Create virtual environment
+# 2. 创建虚拟环境
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-# 3. Install dependencies
+# 3. 安装依赖
 pip install -r requirements.txt
 
-# 4. Configure secrets
+# 4. 配置密钥
 cp .env.example .env
-# Edit .env — add ANTHROPIC_API_KEY at minimum
+# 编辑 .env，填入 ANTHROPIC_API_KEY=sk-ant-...
+```
 
-# 5. Smoke-test the scraper (no API key needed)
+### 市场数据说明
+
+- **CNH/USD**：从 Bloomberg（`USDCNH Curncy`）或 Wind 手动导出分钟级 CSV，
+  放入 `data/raw/`，并按需更新 `market_data_loader.py` 中的 `CNH_COLUMN_MAP`
+- **BTC/USDT**：自动从 Binance 拉取，无需手动操作
+
+---
+
+## 冒烟测试
+
+```bash
+# 测试人民银行爬虫（无需 API 密钥）
 python -m src.scraping.pboc_scraper
 
-# 6. Smoke-test the Binance loader (no API key needed)
+# 测试 Binance 行情拉取（无需 API 密钥）
 python -m src.scraping.market_data_loader
 
-# 7. Run tests
+# 测试 LLM 立场分类（需要 ANTHROPIC_API_KEY）
+python -m src.llm_processing.stance_classifier
+
+# 运行单元测试
 pytest
 ```
 
-### Market Data
+### 已验证输出示例
 
-- **CNH/USD**: Export 1-minute or 5-minute bars from Bloomberg (`USDCNH Curncy`)
-  or Wind as CSV and place in `data/raw/cnh_<start>_<end>.csv`.
-  Update `CNH_COLUMN_MAP` in `market_data_loader.py` to match your export columns.
-- **BTC/USDT**: Fetched automatically from Binance — no manual step required.
+**爬虫**（2026-07 实测，人民银行官网）：
+```
+{'title': '中国人民银行行长潘功胜出席国际清算银行行长例会及年度股东大会',
+ 'url': 'https://www.pbc.gov.cn/goutongjiaoliu/...', 'published': '2026-06-28'}
+```
 
----
-
-## Status / Roadmap
-
-> **Early-stage capstone scaffold — pending advisor sign-off and pilot test.**
-
-- [x] Repo structure and module skeletons
-- [x] PBOC scraper skeleton (connectivity; pagination and full-text are TODOs)
-- [x] LLM stance classifier (prompt + Anthropic API call)
-- [x] Surprise score construction and market alignment logic
-- [x] Granger causality and event-study test stubs
-- [ ] Validate PBOC scraper against live site (CSS selector verification)
-- [ ] Collect pilot dataset: ~50–100 PBOC documents (2022–2024)
-- [ ] Obtain CNH tick/bar data from Bloomberg/Wind
-- [ ] Run pilot classification and check inter-rater reliability vs. human labels
-- [ ] First pass Granger test on pilot data
-- [ ] Expand to additional PBOC channels (press conference transcripts, branch statements)
-- [ ] English wire timestamp collection for lag measurement
-- [ ] Full sample analysis and write-up
+**LLM 分类**（测试文本：关于"适时适度运用降准、降息"的前瞻性表述）：
+```
+segment_type = forward_guidance
+stance       = dovish
+confidence   = 0.95
+reasoning    = 文段以【下一阶段】开篇，明确指向未来政策方向…直接暗示降准降息预期，立场明显偏鸽派
+```
 
 ---
 
-## Citation / Acknowledgements
+## 进度 / 路线图
 
-Project advised by [Advisor TBD], NUS School of Computing.
+> **早期脚手架阶段 — 待导师签字确认及 pilot 测试。**
 
-Key methodological references:
-- Gürkaynak, Sack & Swanson (2005) — monetary policy surprise decomposition
-- Hansen, McMahon & Prat (2018) — central bank communication and market reactions
-- Miranda-Agrippino & Ricco (2021) — information effects of monetary policy
+- [x] 项目结构与模块骨架
+- [x] PBOC 爬虫（列表页采集、翻页、CSS 选择器已对线上页面验证）
+- [x] LLM 立场分类（中文 prompt + Claude API，JSON 解析已处理）
+- [x] 惊喜度构建与市场收益率对齐逻辑
+- [x] 格兰杰检验与事件研究检验桩
+- [x] 单元测试（6/6 通过）
+- [ ] 全文抓取（单篇文章正文提取，CSS 选择器待验证）
+- [ ] 采集 pilot 语料：2022–2024 年约 50–100 篇 PBOC 文件
+- [ ] 从 Bloomberg/Wind 获取 CNH tick/分钟级数据
+- [ ] 运行 pilot 分类，与人工标注对比一致性
+- [ ] 完成 pilot 阶段格兰杰检验
+- [ ] 扩展至更多渠道（发布会实录、地区分行表态）
+- [ ] 英文电报时间戳采集（用于量化时滞）
+- [ ] 全样本分析与论文写作
 
 ---
 
-*This project is for academic research purposes only.*
+## 参考文献
+
+- Gürkaynak, Sack & Swanson (2005) — 货币政策惊喜度分解
+- Hansen, McMahon & Prat (2018) — 央行沟通与市场反应
+- Miranda-Agrippino & Ricco (2021) — 货币政策的信息效应
+
+---
+
+*本项目仅供学术研究使用。*
+*指导教师：[待定]，新加坡国立大学计算学院。*
