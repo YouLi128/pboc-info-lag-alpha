@@ -1,0 +1,28 @@
+pboc:
+  base_url: "https://www.pbc.gov.cn"
+  press_release_path: "/goutongjiaoliu/113456/113469/index.html"
+  # Additional channels to add as scraping matures:
+  # - monetary_policy_reports
+  # - press_conference_transcripts
+  # - regional_branch_statements
+  request_delay_seconds: 2          # polite crawl delay
+  max_pages: 50                     # pagination limit per run
+
+binance:
+  base_url: "https://api.binance.com"
+  symbol: "BTCUSDT"
+  interval: "1h"                    # kline granularity
+  lookback_days: 30
+
+llm:
+  model: "claude-sonnet-4-6"
+  max_tokens: 512
+  temperature: 0.0                  # deterministic for classification
+
+signal:
+  window_minutes: [5, 15, 30, 60]  # post-release return windows
+  baseline_window_minutes: 60       # pre-release baseline for surprise score
+
+analysis:
+  granger_max_lag: 5
+  significance_level: 0.05
