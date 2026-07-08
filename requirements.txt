@@ -6,6 +6,7 @@ lxml>=5.0.0
 # Data
 pandas>=2.1.0
 numpy>=1.26.0
+akshare>=1.18.0
 
 # LLM
 anthropic>=0.28.0
