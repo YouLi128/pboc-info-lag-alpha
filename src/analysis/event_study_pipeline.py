@@ -141,10 +141,19 @@ def align_daily(events: pd.DataFrame, cnh_1d_csv: str,
     mkt.index = pd.to_datetime(mkt.index, utc=True)
     mkt["ret"] = mkt["close"].pct_change()
 
+    mkt_start = mkt.index[0]
+    mkt_end   = mkt.index[-1]
+
     rows = []
     for _, ev in events.iterrows():
         t0 = ev["release_utc"]
         row = ev.to_dict()
+        # Skip events outside the market data window
+        if t0 < mkt_start or t0 > mkt_end:
+            for w in windows:
+                row[f"ret_{w}d"] = np.nan
+            rows.append(row)
+            continue
         future = mkt[mkt.index >= t0]
         for w in windows:
             row[f"ret_{w}d"] = future["ret"].iloc[w] if len(future) > w else np.nan

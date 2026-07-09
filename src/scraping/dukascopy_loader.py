@@ -20,6 +20,7 @@ import logging
 import lzma
 import struct
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -34,6 +35,7 @@ PRICE_DIVISOR = 100_000.0
 # bi5 tick record: uint32 ms_offset, uint32 ask, uint32 bid, float32 ask_vol, float32 bid_vol
 RECORD_FORMAT = ">IIIff"
 RECORD_SIZE = struct.calcsize(RECORD_FORMAT)  # 20 bytes
+MAX_WORKERS = 20  # concurrent HTTP requests
 
 
 def _bi5_url(instrument: str, dt: datetime) -> str:
@@ -69,17 +71,28 @@ def _parse_bi5(data: bytes, hour_dt: datetime) -> list[dict]:
     return rows
 
 
-def fetch_hour(instrument: str, dt: datetime, session: requests.Session) -> list[dict]:
+def fetch_hour(
+    instrument: str, dt: datetime, session: requests.Session, retries: int = 3
+) -> list[dict]:
+    """
+    Fetch one hour's tick file. The feed is flaky (intermittent timeouts/
+    resets even when not rate-limited), so retry a few times with backoff
+    before giving up and returning [].
+    """
     url = _bi5_url(instrument, dt)
-    try:
-        r = session.get(url, timeout=15)
-        if r.status_code == 404:
-            return []
-        r.raise_for_status()
-        return _parse_bi5(r.content, dt)
-    except Exception as exc:
-        logger.debug("Skip %s: %s", url, exc)
-        return []
+    for attempt in range(retries):
+        try:
+            r = session.get(url, timeout=20)
+            if r.status_code == 404:
+                return []
+            r.raise_for_status()
+            return _parse_bi5(r.content, dt)
+        except Exception as exc:
+            if attempt + 1 == retries:
+                logger.debug("Skip %s after %d attempts: %s", url, retries, exc)
+                return []
+            time.sleep(1.5 * (attempt + 1))
+    return []
 
 
 def fetch_range(
@@ -88,9 +101,10 @@ def fetch_range(
     instrument: str = INSTRUMENT,
     interval: str = "h1",
     out_path: Path | None = None,
+    workers: int = MAX_WORKERS,
 ) -> pd.DataFrame:
     """
-    Download and return OHLCV data for the given UTC date range.
+    Download OHLCV data concurrently for the given UTC date range.
 
     Args:
         start:      Start datetime (UTC).
@@ -98,29 +112,26 @@ def fetch_range(
         instrument: Dukascopy instrument code, default "USDCNH".
         interval:   "tick" for raw ticks, "h1" to resample to 1-hour bars.
         out_path:   If provided, save CSV here.
+        workers:    Number of concurrent HTTP requests.
     """
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (research-bot)"})
 
-    all_rows: list[dict] = []
     current = start.replace(minute=0, second=0, microsecond=0)
-    total_hours = int((end - start).total_seconds() / 3600) + 1
-
-    logger.info("Fetching %d hours of %s data …", total_hours, instrument)
-
-    fetched = 0
+    hours = []
     while current <= end:
-        rows = fetch_hour(instrument, current, session)
-        all_rows.extend(rows)
-        fetched += 1
-
-        if fetched % 100 == 0:
-            logger.info(
-                "  %d / %d hours  (%s)", fetched, total_hours, current.strftime("%Y-%m-%d")
-            )
-
+        hours.append(current)
         current += timedelta(hours=1)
-        time.sleep(0.05)  # polite delay
+
+    logger.info("Fetching %d hours of %s data (workers=%d)…", len(hours), instrument, workers)
+
+    all_rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fetch_hour, instrument, h, session): h for h in hours}
+        for fut in as_completed(futures):
+            rows = fut.result()
+            if rows:
+                all_rows.extend(rows)
 
     if not all_rows:
         logger.warning("No data returned — check instrument name or date range.")

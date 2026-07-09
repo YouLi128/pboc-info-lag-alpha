@@ -34,15 +34,16 @@ LISTINGS = Path("data/processed/corpus_2022_2024_listings.csv")
 
 
 def load_done(out: Path) -> set[str]:
-    """Return set of URLs already classified in the output file."""
+    """Return set of URLs already successfully classified (segment_type not null)."""
     if not out.exists():
         return set()
-    df = pd.read_csv(out, usecols=["url"])
-    return set(df["url"].dropna())
+    df = pd.read_csv(out, usecols=["url", "segment_type"])
+    done = df[df["segment_type"].notna() & (df["segment_type"] != "")]
+    return set(done["url"].dropna())
 
 
-def run(out: Path) -> None:
-    listings = pd.read_csv(LISTINGS)
+def run(out: Path, listings_path: Path = LISTINGS) -> None:
+    listings = pd.read_csv(listings_path)
     done = load_done(out)
     todo = listings[~listings["url"].isin(done)]
 
@@ -62,7 +63,7 @@ def run(out: Path) -> None:
             writer.writeheader()
 
         for i, (_, row) in enumerate(todo.iterrows()):
-            if row["text_length"] == 0:
+            if row.get("text_length", -1) == 0:
                 seg = stance = reasoning = ""
                 conf = 0.0
                 text_len = 0
@@ -114,5 +115,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path,
                         default=Path("data/processed/corpus_classified.csv"))
+    parser.add_argument("--listings", type=Path, default=LISTINGS)
     args = parser.parse_args()
-    run(args.out)
+    run(args.out, listings_path=args.listings)
