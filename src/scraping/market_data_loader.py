@@ -10,6 +10,10 @@ CNH (offshore RMB):
 BTC (auxiliary 24/7 asset):
     fetch_btc_ohlcv() hits the public Binance REST klines endpoint — no API key
     required.  Used as a worked example and sanity-check for the signal pipeline.
+
+CSI 300 (沪深300, broad-market extension branch):
+    fetch_csi300_daily() pulls daily OHLCV via the akshare wrapper around
+    Sina's index feed — no API key required, back to 2002.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+import akshare as ak
 import pandas as pd
 import requests
 
@@ -132,6 +137,29 @@ def fetch_btc_ohlcv(
 
 
 # ---------------------------------------------------------------------------
+# CSI 300 loader via akshare (Sina index feed, no auth required)
+# ---------------------------------------------------------------------------
+
+CSI300_SYMBOL = "sh000300"
+
+
+def fetch_csi300_daily(symbol: str = CSI300_SYMBOL) -> pd.DataFrame:
+    """
+    Fetch full daily OHLCV history for the CSI 300 index.
+
+    Returns:
+        DataFrame indexed by date (tz-naive) with columns
+        open, high, low, close (float), volume (float).
+    """
+    logger.info("Fetching CSI 300 daily history (%s)…", symbol)
+    df = ak.stock_zh_index_daily(symbol=symbol)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    logger.info("Fetched %d CSI 300 daily rows (%s ~ %s)", len(df), df.index.min(), df.index.max())
+    return df[["open", "high", "low", "close", "volume"]]
+
+
+# ---------------------------------------------------------------------------
 # CLI smoke test
 # ---------------------------------------------------------------------------
 
@@ -139,3 +167,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     df = fetch_btc_ohlcv(interval="1h", limit=5)
     print(df)
+    csi300 = fetch_csi300_daily()
+    print(csi300.tail())
