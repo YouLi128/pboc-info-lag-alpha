@@ -29,6 +29,18 @@ periods. Needs further investigation before treating as informative
 about H1 — reported here as a validated but unresolved pattern, not a
 confirmed effect in the hypothesized direction.
 
+Tested and ruled out: "overshoot then reversal". The two largest-surprise
+events show a same-day move that partly unwinds by day 2 (e.g.
+2025-01-10's bond-purchase suspension: +2.54bps day 0 -> -1.16bps by
+day 2), which suggested the negative relationship might just be that
+overshoot artifact and should weaken or flip positive at longer
+horizons as the reversal completes. It does not: re-running with
+windows out to 10 trading days keeps the correlation negative
+throughout (strongest at day 2, r=-0.171; still negative at day 10,
+r=-0.124, p=0.076), never flipping sign. The relationship looks more
+structural than a short-term overshoot artifact, but the mechanism
+remains unresolved.
+
 Usage:
     python -m src.analysis.volatility_channel_test
 """
