@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import logging
 import time
 from datetime import datetime, timedelta
@@ -31,9 +32,9 @@ REQUEST_GAP = 6
 OUT = "data/processed/gdelt_coverage.csv"
 
 
-def query_gdelt(start: datetime, end: datetime, retries: int = 3) -> list[dict]:
+def query_gdelt(start: datetime, end: datetime, query: str = QUERY, retries: int = 3) -> list[dict]:
     params = {
-        "query": QUERY,
+        "query": query,
         "mode": "artlist",
         "maxrecords": 25,
         "format": "json",
@@ -63,23 +64,24 @@ def load_done(out_path: str) -> set:
         return set()
 
 
-def main() -> None:
-    events = build_events("data/processed/corpus_classified.csv")
-    done = load_done(OUT)
+def main(classified_csv: str = "data/processed/corpus_classified.csv",
+        out_path: str = OUT, query: str = QUERY) -> None:
+    events = build_events(classified_csv)
+    done = load_done(out_path)
     todo = events[~events["release_utc"].astype(str).isin(done)]
     logger.info("Total events: %d | already done: %d | remaining: %d", len(events), len(done), len(todo))
 
     write_header = not done
     mode = "w" if write_header else "a"
 
-    with open(OUT, mode, encoding="utf-8") as f:
+    with open(out_path, mode, encoding="utf-8") as f:
         if write_header:
             f.write("event_date,release_utc,n_english_articles,earliest_english_utc,lag_hours,covered\n")
 
         for i, (_, ev) in enumerate(todo.iterrows()):
             t0 = ev["release_utc"]
             window_end = t0 + timedelta(days=WINDOW_DAYS)
-            articles = query_gdelt(t0, window_end)
+            articles = query_gdelt(t0, window_end, query=query)
 
             if articles:
                 dates = sorted(a["seendate"] for a in articles if a.get("seendate"))
@@ -97,11 +99,18 @@ def main() -> None:
 
             time.sleep(REQUEST_GAP)
 
-    logger.info("Done. Saved to %s", OUT)
-    final = pd.read_csv(OUT)
+    logger.info("Done. Saved to %s", out_path)
+    final = pd.read_csv(out_path)
     logger.info("Coverage rate: %d / %d (%.0f%%)", final["covered"].sum(), len(final), 100 * final["covered"].mean())
 
 
+NDRC_QUERY = '("NDRC" OR "National Development and Reform Commission" OR "China\'s economic planner") sourcelang:english'
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--classified", default="data/processed/corpus_classified.csv")
+    parser.add_argument("--out", default=OUT)
+    parser.add_argument("--query", default=QUERY)
+    args = parser.parse_args()
+    main(classified_csv=args.classified, out_path=args.out, query=args.query)
