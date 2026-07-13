@@ -104,7 +104,7 @@ def main(classified_csv: str = "data/processed/corpus_classified.csv",
     logger.info("Coverage rate: %d / %d (%.0f%%)", final["covered"].sum(), len(final), 100 * final["covered"].mean())
 
 
-NDRC_QUERY = '("NDRC" OR "National Development and Reform Commission" OR "China\'s economic planner") sourcelang:english'
+NDRC_QUERY = "NDRC China sourcelang:english"
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
