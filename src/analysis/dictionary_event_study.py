@@ -22,8 +22,8 @@ from src.signal_construction.dictionary_baseline import score_corpus
 logger = logging.getLogger(__name__)
 
 
-def build_events_dict(fulltext_csv: str, baseline_window_days: int = 60) -> pd.DataFrame:
-    df = score_corpus(fulltext_csv)
+def build_events_dict(fulltext_csv: str, source: str = "pboc", baseline_window_days: int = 60) -> pd.DataFrame:
+    df = score_corpus(fulltext_csv, source=source)
 
     def _get_timestamp(row):
         url_ts = extract_release_time(row["url"])
