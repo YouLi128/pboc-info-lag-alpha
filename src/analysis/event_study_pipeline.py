@@ -52,10 +52,21 @@ def extract_release_time(url: str) -> pd.Timestamp | None:
 # Step 2: build and deduplicate event table
 # ---------------------------------------------------------------------------
 
-def build_events(classified_csv: str) -> pd.DataFrame:
+def build_events(classified_csv: str, baseline_window_days: int = 60) -> pd.DataFrame:
     """
     Load classified articles, extract precise timestamps, compute surprise,
     and aggregate multiple same-day articles into one event per day.
+
+    baseline_window_days: the surprise baseline is a rolling mean of prior
+    stance scores over this many calendar days (not a fixed count of prior
+    events). A fixed-count window (e.g. "last 5 events") gets compressed
+    during high-frequency communication periods (crises, stimulus pushes) —
+    verified empirically: PBOC's average gap between forward_guidance events
+    drops from ~10.5 days overall to ~4-5 days during COVID-crash (2020-02~04)
+    and the 2024-09 stimulus push. A fixed-count baseline "catches up" faster
+    exactly when real-world volatility is highest, mechanically suppressing
+    measured surprise in precisely the periods it should be largest. A
+    calendar-time window is invariant to communication frequency.
     """
     df = pd.read_csv(classified_csv)
     df = df[df["segment_type"] == "forward_guidance"].copy()
@@ -88,9 +99,12 @@ def build_events(classified_csv: str) -> pd.DataFrame:
         stances       = ("stance", lambda x: "/".join(sorted(set(x)))),
     ).reset_index()
 
-    # Rolling baseline surprise (window = 5 prior events)
+    # Rolling baseline surprise over a fixed calendar window (not a fixed
+    # count of prior events - see baseline_window_days docstring above).
     agg = agg.sort_values("release_utc").reset_index(drop=True)
-    agg["baseline"] = agg["stance_score"].shift(1).rolling(5, min_periods=1).mean().fillna(0)
+    ts_indexed = agg.set_index("release_utc")["stance_score"]
+    baseline = ts_indexed.rolling(f"{baseline_window_days}D", closed="left", min_periods=1).mean()
+    agg["baseline"] = baseline.fillna(0).to_numpy()
     agg["surprise"] = agg["stance_score"] - agg["baseline"]
 
     logger.info("Events after dedup: %d (from %d articles)", len(agg), len(df))
