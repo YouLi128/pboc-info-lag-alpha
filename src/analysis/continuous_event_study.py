@@ -54,6 +54,8 @@ def build_events_continuous(scored_csv: str, baseline_window_days: int = 60) -> 
 
 
 if __name__ == "__main__":
+    import argparse
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     from src.analysis.event_study_pipeline import align_hourly, run_granger_daily
@@ -62,8 +64,13 @@ if __name__ == "__main__":
     from src.analysis.ndrc_event_study import align_daily_csi300
     from src.analysis.volatility_channel_test import volatility_regression
 
-    events = build_events_continuous("data/processed/pboc_fg_continuous_scored.csv")
-    print(f"\n=== Continuous LLM score: {len(events)} events ===")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", choices=["pboc", "ndrc", "mof"], default="pboc")
+    args = parser.parse_args()
+
+    scored_csv = f"data/processed/{args.source}_fg_continuous_scored.csv"
+    events = build_events_continuous(scored_csv)
+    print(f"\n=== Continuous LLM score ({args.source}): {len(events)} events ===")
 
     print("\n--- CNH hourly ---")
     aligned = align_hourly(events, "data/raw/cnh_1h_all_events.csv")
@@ -93,4 +100,4 @@ if __name__ == "__main__":
         vr = volatility_regression(aligned, f"ret_{w}d")
         print(f"  ret_{w}d: dir min_p={r.get('min_pval', 1):.4f} | vol p={vr.get('ols_pval', 1):.4f}")
 
-    events.to_csv("data/processed/pboc_continuous_events.csv", index=False)
+    events.to_csv(f"data/processed/{args.source}_continuous_events.csv", index=False)
